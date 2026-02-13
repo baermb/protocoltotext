@@ -93,6 +93,7 @@ class Protocol():
         self.hdr_char_fill_odd="+"             # Fill character for border odd positions
         self.hdr_char_fill_even="-"            # Fill character for border even positions
         self.hdr_char_sep="|"                  # Field separator character
+        self.hdr_char_varsep="≈"               # Variable Length Field separator character
         self.bits_per_line=32                  # Number of bits per line
         self.do_print_top_tens=True            # True: print top numbers for bit tens
         self.do_print_top_units=True           # True: print top numbers for bit units
@@ -124,6 +125,10 @@ class Protocol():
         for item in items:
             try:
                 text, bits = item.split(":")
+                var_length = False
+                if 'v' in bits:
+                    bits = bits.replace('v', '')
+                    var_length = True
                 bits=int(bits)
                 if bits<=0:
                     raise ProtocolException("FATAL: Fields must be at least one bit long (%s)" %spec)
@@ -131,7 +136,7 @@ class Protocol():
                 raise
             except:
                 raise ProtocolException("FATAL: Invalid field_list specification (%s)" %spec)
-            self.field_list.append({"text":text, "len":bits})
+            self.field_list.append({"text":text, "len":bits, "varlen":var_length})
 
         # Parse options
         if opts is not None:
@@ -152,7 +157,7 @@ class Protocol():
                             self.do_print_top_units=True
                         else:
                             raise ProtocolException("FATAL: Invalid value for 'numbers' option (%s)" % value)
-                    elif var.lower() in ["oddchar", "evenchar", "startchar", "endchar", "sepchar"]:
+                    elif var.lower() in ["oddchar", "evenchar", "startchar", "endchar", "sepchar", "varchar"]:
                         if len(value)>1 or len(value)<=0:
                             raise ProtocolException("FATAL: Invalid value for '%s' option (%s)" % (var, value))
                         else:
@@ -166,6 +171,8 @@ class Protocol():
                                 self.hdr_char_end=value
                             elif var.lower()=="sepchar":
                                 self.hdr_char_sep=value
+                            elif var.lower()=="varchar":
+                                self.hdr_char_varsep=value
                 except ProtocolException:
                     raise
                 except:
@@ -224,6 +231,15 @@ class Protocol():
         return self.hdr_char_sep
 
 
+    def _get_varseparator(self, line_end=""):
+        """
+        @return a string containing a variable length protocol field separator.
+        Returned string is a single character and matches whatever is stored
+        in self.hdr_char_varsep
+        """
+        return self.hdr_char_varsep
+
+
     def _process_field_list(self):
         """
         Processes the list of protocol fields that we got from the spec and turns
@@ -237,8 +253,9 @@ class Protocol():
         while i < len(self.field_list):
             # Extract all the info we need about the field
             field=self.field_list[i]
-            field_text= field['text']
-            field_len=  field['len']
+            field_text=   field['text']
+            field_len=    field['len']
+            field_varlen= field['varlen']
             field['MF']=False
 
             available_in_line = self.bits_per_line - bits_in_line
@@ -270,13 +287,15 @@ class Protocol():
                     # If we have more space in the current line than in the next,
                     # then put the field text in this one
                     if available_in_line >= field_len-available_in_line:
-                        new_field = {'text':field_text, 'len':available_in_line, "MF":True}
+                        new_field = {'text':field_text,     'len':available_in_line,
+                                     'varlen':field_varlen, "MF":True}
                         new_fields.append(new_field)
                         field['text']=""
                         field['len']=field_len-available_in_line
                         field['MF']=False
                     else:
-                        new_field = {'text':"", 'len':available_in_line, "MF":True}
+                        new_field = {'text':"",             'len':available_in_line,
+                                     'varlen':field_varlen, "MF":True}
                         new_fields.append(new_field)
                         field['text']=field_text
                         field['len']=field_len-available_in_line
@@ -316,9 +335,10 @@ class Protocol():
 
             # Extract all the info we need about the field
             field = proto_fields[p]
-            field_text= field['text']
-            field_len=  field['len']
-            field_mf =  field['MF'] is True  # Field has more fragments
+            field_text =   field['text']
+            field_len =    field['len']
+            field_varlen = field['varlen']
+            field_mf =     field['MF'] is True  # Field has more fragments
 
             # If the field text is too long, we truncate it, and add a dot
             # at the end.
@@ -344,7 +364,11 @@ class Protocol():
 
                 # If this is the last character in the line, store the line
                 if bits_in_line==self.bits_per_line:
-                    current_line+=self._get_separator()
+                    # if it is a variable length field, use variable length separator
+                    if field_varlen :
+                        current_line+=self._get_varseparator()
+                    else :
+                        current_line+=self._get_separator()
                     lines.append(current_line)
                     current_line=""
                     bits_in_line=0
@@ -389,12 +413,20 @@ class Protocol():
                 # If this is not the last character of the line but we have no
                 # more fields to print, wrap up
                 elif fields_done==len(proto_fields):
-                    current_line+=self._get_separator()
+                    # if it is a variable length field, use variable length separator
+                    if field_varlen :
+                        current_line+=self._get_varseparator()
+                    else :
+                        current_line+=self._get_separator()
                     lines.append(current_line)
                     lines.append(self._get_horizontal(bits_in_line))
                 else:
                     # Add the separator character
-                    current_line+=self.hdr_char_sep
+                    # if it is a variable length field, use variable length separator
+                    if field_varlen :
+                        current_line+=self._get_varseparator()
+                    else :
+                        current_line+=self._get_separator()
 
             # We don't have enough space for the field on this line.
             else:
@@ -415,10 +447,18 @@ class Protocol():
                             # to start and end the current line
                             if i%2==1:
                                 start_line=self.hdr_char_start
-                                end_line=self.hdr_char_end
+                                # if it is a variable length field, use variable length separator
+                                if field_varlen :
+                                    end_line=self._get_varseparator()
+                                else :
+                                    end_line=self.hdr_char_end
                             else:
                                 start_line=self.hdr_char_sep
-                                end_line=self.hdr_char_sep
+                                # if it is a variable length field, use variable length separator
+                                if field_varlen :
+                                    end_line=self._get_varseparator()
+                                else :
+                                    end_line=self.hdr_char_sep
 
                             # This is the line where we need to print the field
                             # text.
@@ -462,6 +502,7 @@ class Main():
         self.hdr_char_fill_odd=None         # Fill character for border odd positions
         self.hdr_char_fill_even=None        # Fill character for border even positions
         self.hdr_char_sep=None              # Field separator character
+        self.hdr_char_varsep=None           # Variable length Field end separator character
 
 
     def display_help(self):
@@ -488,6 +529,7 @@ class Main():
         print(" --startchar <char>  : Character that starts horizontal table borders")
         print(" --endchar   <char>  : Character that ends horizontal table borders")
         print(" --sepchar   <char>  : Character that separates protocol fields")
+        print(" --varchar   <char>  : Character that ends variable length protocol fields")
 
 
     def get_usage(self):
@@ -592,7 +634,7 @@ class Main():
                     self.skip_numbers=True
 
                 # Character variations
-                elif argv[i] in ["--oddchar", "--evenchar", "--startchar", "--endchar", "--sepchar"]:
+                elif argv[i] in ["--oddchar", "--evenchar", "--startchar", "--endchar", "--sepchar", "--varchar"]:
                     # Make sure we have an actual parameter after the flag
                     if (i+1)>=len(argv):
                         return OP_FAILURE, "Expected parameter after %s\n%s" % (argv[i], self.get_usage())
@@ -613,6 +655,8 @@ class Main():
                         self.hdr_char_end=argv[i+1]
                     elif argv[i]=="--sepchar":
                         self.hdr_char_sep=argv[i+1]
+                    elif argv[i]=="--varchar":
+                        self.hdr_char_varsep=argv[i+1]
 
                 # Display help
                 elif argv[i]=="-h" or argv[i]=="--help":
@@ -715,6 +759,8 @@ class Main():
                 self.protocols[i].hdr_char_fill_odd=self.hdr_char_fill_odd
             if self.hdr_char_sep is not None:
                 self.protocols[i].hdr_char_sep=self.hdr_char_sep
+            if self.hdr_char_varsep is not None:
+                self.protocols[i].hdr_char_varsep=self.hdr_char_varsep
 
             print(self.protocols[i])
             if len(self.protocols)>1 and i!=len(self.protocols)-1:

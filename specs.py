@@ -515,6 +515,25 @@ s7_item="Var Type:8,Var Length:8,Syntax ID:8,Transport Size:8,Length:16,DB Numbe
 
 s7_data="Return Code:8,Transport Size:8,Data Length:16"
 
+#  0                   1                   2                   3  
+#  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+# +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+# |                         Version Number                        |
+# +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+# |                           Message ID                          |
+# +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+# |                        Max Message Size                       |
+# +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+# |    Msg Flags  |             Message Security Model            |
+# +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+# |               |        Msg Sec Params (variable length)       ≈
+# +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+# |                  Scoped PDU (variable length)                 ≈
+# +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+snmpv3="Version Number:32,Message ID:32,Max Message Size:32, Msg Flags:8,\
+Message Security Model:32, Msg Sec Params (variable length):24v,\
+Scoped PDU (variable length):32v?numbers=y"
+
 #      0                   1
 #      0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5
 #     *-------------------------------*
@@ -762,6 +781,7 @@ protocols={"ethernet":ethernet,
            "cotp_cr":cotp_cr,
            "cotp_dt":cotp_dt,
            "cotp_dr":cotp_dr,
+           "snmpv3":snmpv3,
            "example":example,
            "test":test
            }
