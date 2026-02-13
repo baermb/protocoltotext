@@ -136,7 +136,7 @@ class Protocol():
                 raise
             except:
                 raise ProtocolException("FATAL: Invalid field_list specification (%s)" %spec)
-            self.field_list.append({"text":text, "len":bits, "varlen":var_length})
+            self.field_list.append({"text":text.strip(), "len":bits, "varlen":var_length})
 
         # Parse options
         if opts is not None:
