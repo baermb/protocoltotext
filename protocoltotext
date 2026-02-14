@@ -58,6 +58,7 @@
 # STANDARD LIBRARY IMPORTS
 import sys
 from datetime import date
+import shutil
 
 # INTERNAL IMPORTS
 from constants import *
@@ -515,7 +516,7 @@ class Main():
         print("This software comes with ABSOLUTELY NO WARRANTY.")
         print("")
         self.display_usage()
-        print("PARAMETERS:")
+        print("PARAMETERS: (these are processed in order, e.g. -f before -l")
         print(" <protocol>          : Name of an existing protocol")
         print(" <spec>              : Field by field specification of non-existing protocol")
         print("OPTIONS:")
@@ -523,6 +524,8 @@ class Main():
         print(" -f, --file          : Read specs from a text file")
         print(" -h, --help          : Displays this help information")
         print(" -n, --no-numbers    : Do not print bit numbers on top of the header")
+        print(" -l, --list          : List available protocols, column order")
+        print(" -L, --List          : List available protocols, row order")
         print(" -V, --version       : Displays current version")
         print(" --evenchar  <char>  : Character for the even positions of horizontal table borders")
         print(" --oddchar   <char>  : Character for the odd positions of horizontal table borders")
@@ -578,6 +581,50 @@ class Main():
             i+=1
 
         return i
+
+
+    def print_protocol_list(self, format="column"):
+        """
+        Print a list of the protocols loaded.
+        Can do "row" or "column" order
+        And yes, this is massive overkill, but I started playing
+        with the row/col math so... overkill it is!
+        """
+        # setup all variables (i.e. for both column/row format
+        tty_cols, tty_rows = shutil.get_terminal_size( fallback=(80,40) )
+        # tty_cols is too large for some reason? need a fudge factor
+
+        # I set the protocol names to print belowe at 20 wide + 2 extra spaces
+        cols = int(tty_cols / 22)
+        spkeys = sorted(specs.protocols.keys())
+        alen = len(spkeys)
+        leftover = alen % cols
+        col_add = rows = int(alen / cols)
+        if ( leftover > 0 ) :
+            col_add += 1
+            rows    += 1
+        nlen = alen - leftover
+
+        # print column order
+        if ( format == "column" ) :
+            for i in range( 0, rows, 1) :
+                limit = (i + ((cols - 1) * col_add))
+                if ( limit >= alen ) :
+                    limit = limit - col_add
+                for h in range( i, limit, col_add) : 
+                    print("%20.20s  " % ( spkeys[h] ), end="")
+                print("%20.20s" % ( spkeys[ limit ] ), end="\n")
+        # print row order
+        else:
+            for i in range( 0, nlen, cols):
+                for h in range( i, (i+cols-1)) :
+                    print("%20.20s  " % ( spkeys[h] ), end="")
+                print("%20.20s" % ( spkeys[i+cols-1] ), end="\n")
+            if ( leftover > 0 ) :
+                for i in range ( nlen, (nlen + leftover - 1) ) :
+                    print("%20.20s  " % ( spkeys[i] ), end="")
+                print("%20.20s" % ( spkeys[ nlen+leftover-1 ] ), end="\n")
+        print()
 
 
     def parse_cmd_line_args(self, argv, is_config_file=False):
@@ -666,6 +713,16 @@ class Main():
                 # Display version
                 elif argv[i]=="-V" or argv[i]=="--version":
                     print("%s v%s" % (APPLICATION_NAME, APPLICATION_VERSION))
+                    sys.exit(0)
+
+                # Display included protocols column order
+                elif argv[i]=="-l" or argv[i]=="--list" :
+                    self.print_protocol_list(format="column")
+                    sys.exit(0)
+
+                # Display included protocols row order
+                elif argv[i]=="-L" or argv[i]=="--List" :
+                    self.print_protocol_list(format="row")
                     sys.exit(0)
 
                 # Incorrect option supplied
